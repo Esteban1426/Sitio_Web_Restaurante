@@ -61,6 +61,41 @@ async function getNextSequence(key: string): Promise<number> {
 // ─── Health ───────────────────────────────────────────────────
 app.get("/make-server-54897cbc/health", (c) => c.json({ status: "ok", service: "Prime & Rare" }));
 
+// ─── Puzzle image proxy (CORS-safe fetch server-side) ─────────
+app.get("/make-server-54897cbc/image-proxy", async (c) => {
+  const target = c.req.query("url");
+  if (!target || typeof target !== "string") return c.text("missing url", 400);
+  if (target.length > 2048) return c.text("url too long", 400);
+  let remote: URL;
+  try {
+    remote = new URL(target);
+  } catch {
+    return c.text("invalid url", 400);
+  }
+  if (remote.protocol !== "http:" && remote.protocol !== "https:") {
+    return c.text("invalid protocol", 400);
+  }
+  try {
+    const upstream = await fetch(target, {
+      redirect: "follow",
+      headers: { "User-Agent": "PrimeRare-PuzzleImageProxy/1.0" },
+    });
+    if (!upstream.ok) return c.text("upstream error", 502);
+    const ct = upstream.headers.get("content-type") ?? "application/octet-stream";
+    if (!ct.startsWith("image/")) return c.text("not an image", 400);
+    const buf = new Uint8Array(await upstream.arrayBuffer());
+    return new Response(buf, {
+      headers: {
+        "Content-Type": ct,
+        "Cache-Control": "public, max-age=3600",
+        "Access-Control-Allow-Origin": "*",
+      },
+    });
+  } catch (e: any) {
+    return c.text(`proxy failed: ${e?.message ?? "error"}`, 500);
+  }
+});
+
 // ─── Admin Setup ──────────────────────────────────────────────
 app.post("/make-server-54897cbc/admin/setup", async (c) => {
   try {

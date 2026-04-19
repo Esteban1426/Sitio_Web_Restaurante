@@ -5,6 +5,7 @@ import { HomePage } from './pages/HomePage';
 import { MenuPage } from './pages/MenuPage';
 import { CartPage } from './pages/CartPage';
 import { OrderTrackingPage } from './pages/OrderTrackingPage';
+import { PuzzleGamePage } from './pages/PuzzleGamePage';
 import { ReservationsPage } from './pages/ReservationsPage';
 import { AdminLoginPage } from './pages/AdminLoginPage';
 import { AdminDashboardPage } from './pages/admin/AdminDashboardPage';
@@ -44,6 +45,7 @@ export const router = createBrowserRouter([
       { path: 'menu', Component: MenuPage },
       { path: 'cart', Component: CartPage },
       { path: 'track', Component: OrderTrackingPage },
+      { path: 'puzzle-game', Component: PuzzleGamePage },
       { path: 'reservations', Component: ReservationsPage },
     ],
   },

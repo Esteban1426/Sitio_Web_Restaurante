@@ -1,11 +1,10 @@
 import { useState, useEffect, useCallback } from 'react';
-import { useSearchParams } from 'react-router';
+import { useSearchParams, useNavigate, useLocation } from 'react-router';
 import { getOrder, formatCOP } from '../lib/api';
-import { Search, Package, ChefHat, Truck, CheckCircle, Clock, XCircle } from 'lucide-react';
+import { Search, Package, ChefHat, Clock, CheckCircle, XCircle, Gamepad2 } from 'lucide-react';
 import { motion } from 'motion/react';
 import type { Order } from '../lib/localDB';
 import { validateOrderTrackingInput } from '../lib/validation';
-import { PuzzleWaitingModal } from '../components/PuzzleWaitingModal';
 
 const PASOS_ESTADO = [
   { key: 'pendiente', label: 'Pedido Recibido', icon: Package, desc: 'Recibimos tu pedido' },
@@ -31,14 +30,13 @@ const ETIQUETAS_ESTADO: Record<string, string> = {
 
 export function OrderTrackingPage() {
   const [searchParams] = useSearchParams();
+  const navigate = useNavigate();
+  const location = useLocation();
   const idFromUrl = searchParams.get('id');
   const [inputId, setInputId] = useState(idFromUrl || '');
   const [order, setOrder] = useState<Order | null>(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
-  const [puzzleOpen, setPuzzleOpen] = useState(false);
-  const [fetchState, setFetchState] = useState<'idle' | 'loading' | 'success' | 'error'>('idle');
-  const [fetchLabel, setFetchLabel] = useState('Buscando el estado del pedido…');
 
   const handleSearch = useCallback(async () => {
     const err = validateOrderTrackingInput(inputId);
@@ -51,16 +49,11 @@ export function OrderTrackingPage() {
     setLoading(true);
     setError('');
     setOrder(null);
-    setPuzzleOpen(true);
-    setFetchState('loading');
-    setFetchLabel(`Consultando pedido: ${id}`);
     try {
       const data = await getOrder(id);
       setOrder(data.order);
-      setFetchState('success');
     } catch {
       setError('Pedido no encontrado. Verifica el ID de seguimiento.');
-      setFetchState('error');
     } finally {
       setLoading(false);
     }
@@ -73,33 +66,34 @@ export function OrderTrackingPage() {
     setLoading(true);
     setError('');
     setOrder(null);
-    setPuzzleOpen(true);
-    setFetchState('loading');
-    setFetchLabel(`Consultando pedido: ${fromUrl}`);
+    let cancelled = false;
     getOrder(fromUrl)
-      .then(d => setOrder(d.order))
-      .catch(() =>
-        setError('Pedido no encontrado. Verifica el ID de seguimiento.')
-      )
-      .then(() => setFetchState('success'))
-      .catch(() => setFetchState('error'))
-      .finally(() => setLoading(false));
+      .then(d => {
+        if (!cancelled) setOrder(d.order);
+      })
+      .catch(() => {
+        if (!cancelled) {
+          setError('Pedido no encontrado. Verifica el ID de seguimiento.');
+        }
+      })
+      .finally(() => {
+        if (!cancelled) setLoading(false);
+      });
+    return () => {
+      cancelled = true;
+    };
   }, [idFromUrl]);
+
+  const goToPuzzle = () => {
+    const returnTo = `${location.pathname}${location.search}`;
+    navigate('/puzzle-game', { state: { returnTo } });
+  };
 
   const currentStep = order ? (INDICE_ESTADO[order.status] ?? 0) : -1;
   const isCancelled = order?.status === 'cancelado';
 
   return (
     <div className="min-h-screen bg-[#0A0A0A] pt-20">
-      <PuzzleWaitingModal
-        open={puzzleOpen}
-        fetchState={fetchState}
-        fetchLabel={fetchLabel}
-        onClose={() => {
-          setPuzzleOpen(false);
-          if (fetchState !== 'loading') setFetchState('idle');
-        }}
-      />
       <div className="max-w-2xl mx-auto px-4 sm:px-6 py-16">
         <div className="text-center mb-12">
           <div className="text-[#C9A84C] text-xs tracking-[0.3em] uppercase mb-3 font-medium">
@@ -109,7 +103,7 @@ export function OrderTrackingPage() {
         </div>
 
         {/* Búsqueda */}
-        <div className="flex gap-3 mb-12">
+        <div className="flex gap-3 mb-8">
           <input
             value={inputId}
             onChange={e => setInputId(e.target.value)}
@@ -123,6 +117,27 @@ export function OrderTrackingPage() {
             className="px-6 py-3.5 bg-[#C9A84C] text-[#0A0A0A] font-bold rounded-xl hover:bg-[#D4AF37] transition-colors disabled:opacity-60 flex items-center gap-2 text-sm"
           >
             <Search className="w-4 h-4" /> {loading ? '...' : 'Buscar'}
+          </button>
+        </div>
+
+        <div className="mb-10 rounded-2xl border border-[#C9A84C]/25 bg-[#C9A84C]/[0.06] p-5 sm:p-6 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
+          <div className="flex items-start gap-3 text-left">
+            <div className="w-11 h-11 rounded-xl bg-[#C9A84C]/15 border border-[#C9A84C]/30 flex items-center justify-center shrink-0">
+              <Gamepad2 className="w-5 h-5 text-[#C9A84C]" />
+            </div>
+            <div>
+              <p className="text-white font-semibold text-sm sm:text-base">¿Tienes un momento?</p>
+              <p className="text-white/45 text-xs sm:text-sm mt-0.5">
+                Abre el minijuego solo si quieres — el seguimiento no depende de él.
+              </p>
+            </div>
+          </div>
+          <button
+            type="button"
+            onClick={goToPuzzle}
+            className="shrink-0 w-full sm:w-auto px-6 py-3.5 rounded-xl bg-[#C9A84C] text-[#0A0A0A] font-bold text-sm hover:bg-[#D4AF37] transition-colors text-center"
+          >
+            Play a game while you wait
           </button>
         </div>
 
