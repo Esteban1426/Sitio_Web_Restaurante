@@ -5,6 +5,7 @@ import { Search, Package, ChefHat, Truck, CheckCircle, Clock, XCircle } from 'lu
 import { motion } from 'motion/react';
 import type { Order } from '../lib/localDB';
 import { validateOrderTrackingInput } from '../lib/validation';
+import { PuzzleWaitingModal } from '../components/PuzzleWaitingModal';
 
 const PASOS_ESTADO = [
   { key: 'pendiente', label: 'Pedido Recibido', icon: Package, desc: 'Recibimos tu pedido' },
@@ -35,6 +36,9 @@ export function OrderTrackingPage() {
   const [order, setOrder] = useState<Order | null>(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
+  const [puzzleOpen, setPuzzleOpen] = useState(false);
+  const [fetchState, setFetchState] = useState<'idle' | 'loading' | 'success' | 'error'>('idle');
+  const [fetchLabel, setFetchLabel] = useState('Buscando el estado del pedido…');
 
   const handleSearch = useCallback(async () => {
     const err = validateOrderTrackingInput(inputId);
@@ -47,11 +51,16 @@ export function OrderTrackingPage() {
     setLoading(true);
     setError('');
     setOrder(null);
+    setPuzzleOpen(true);
+    setFetchState('loading');
+    setFetchLabel(`Consultando pedido: ${id}`);
     try {
       const data = await getOrder(id);
       setOrder(data.order);
+      setFetchState('success');
     } catch {
       setError('Pedido no encontrado. Verifica el ID de seguimiento.');
+      setFetchState('error');
     } finally {
       setLoading(false);
     }
@@ -64,11 +73,16 @@ export function OrderTrackingPage() {
     setLoading(true);
     setError('');
     setOrder(null);
+    setPuzzleOpen(true);
+    setFetchState('loading');
+    setFetchLabel(`Consultando pedido: ${fromUrl}`);
     getOrder(fromUrl)
       .then(d => setOrder(d.order))
       .catch(() =>
         setError('Pedido no encontrado. Verifica el ID de seguimiento.')
       )
+      .then(() => setFetchState('success'))
+      .catch(() => setFetchState('error'))
       .finally(() => setLoading(false));
   }, [idFromUrl]);
 
@@ -77,6 +91,15 @@ export function OrderTrackingPage() {
 
   return (
     <div className="min-h-screen bg-[#0A0A0A] pt-20">
+      <PuzzleWaitingModal
+        open={puzzleOpen}
+        fetchState={fetchState}
+        fetchLabel={fetchLabel}
+        onClose={() => {
+          setPuzzleOpen(false);
+          if (fetchState !== 'loading') setFetchState('idle');
+        }}
+      />
       <div className="max-w-2xl mx-auto px-4 sm:px-6 py-16">
         <div className="text-center mb-12">
           <div className="text-[#C9A84C] text-xs tracking-[0.3em] uppercase mb-3 font-medium">

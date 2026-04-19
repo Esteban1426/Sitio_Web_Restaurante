@@ -1,8 +1,9 @@
 import React, { createContext, useContext, useState, useEffect } from 'react';
-import { adminLogin, adminLogout, getAdminSession, AdminUser } from '../lib/localDB';
+import type { User } from '@supabase/supabase-js';
+import { supabase } from '../lib/supabaseClient';
 
 interface AuthContextType {
-  user: AdminUser | null;
+  user: User | null;
   loading: boolean;
   signIn: (email: string, password: string) => Promise<void>;
   signOut: () => Promise<void>;
@@ -11,27 +12,49 @@ interface AuthContextType {
 const AuthContext = createContext<AuthContextType | null>(null);
 
 export function AuthProvider({ children }: { children: React.ReactNode }) {
-  const [user, setUser] = useState<AdminUser | null>(null);
+  const [user, setUser] = useState<User | null>(null);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    // Restaurar sesión guardada en localStorage
-    const session = getAdminSession();
-    setUser(session);
-    setLoading(false);
+    let mounted = true;
+
+    supabase.auth
+      .getSession()
+      .then(({ data, error }) => {
+        if (!mounted) return;
+        if (error) console.error('Error recuperando sesión:', error);
+        setUser(data.session?.user ?? null);
+        setLoading(false);
+      })
+      .catch(e => {
+        if (!mounted) return;
+        console.error('Error recuperando sesión:', e);
+        setLoading(false);
+      });
+
+    const { data: sub } = supabase.auth.onAuthStateChange((_event, session) => {
+      setUser(session?.user ?? null);
+    });
+
+    return () => {
+      mounted = false;
+      sub.subscription.unsubscribe();
+    };
   }, []);
 
   const signIn = async (email: string, password: string): Promise<void> => {
-    const loggedIn = adminLogin(email, password);
-    if (!loggedIn) {
-      throw new Error('Correo o contraseña incorrectos');
+    const { error } = await supabase.auth.signInWithPassword({
+      email: email.trim(),
+      password,
+    });
+    if (error) {
+      throw new Error(error.message || 'No se pudo iniciar sesión');
     }
-    setUser(loggedIn);
   };
 
   const signOut = async (): Promise<void> => {
-    adminLogout();
-    setUser(null);
+    const { error } = await supabase.auth.signOut();
+    if (error) throw new Error(error.message || 'No se pudo cerrar sesión');
   };
 
   return (
